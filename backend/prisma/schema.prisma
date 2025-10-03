@@ -1,0 +1,36 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model ContractEvent {
+  id              String   @id @default(cuid())
+  address         String
+  blockNumber     BigInt
+  transactionHash String
+  logIndex        Int
+  data            String
+  topics          String[]
+  createdAt       DateTime @default(now())
+
+  @@unique([transactionHash, logIndex])
+}
+
+model PollingState {
+  id          Int     @id
+  lastBlock   BigInt
+  updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now())
+}
