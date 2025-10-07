@@ -1,40 +1,34 @@
 import type { FastifyBaseLogger } from "fastify";
-import { JsonRpcProvider, Contract, type BigNumberish } from "ethers";
+import { JsonRpcProvider, Contract } from "ethers";
 
 import { env } from "@/env";
 import { prisma } from "@/prisma";
 
 const distributorAbi = [
-  {"inputs":[],"name":"validatorManager","outputs":[{"internalType":"contract IValidatorManager","name":"","type":"address"}],"stateMutability":"view","type":"function"},
-  {"inputs":[],"name":"validatorContributionFeed","outputs":[{"internalType":"contract IValidatorContributionFeed","name":"","type":"address"}],"stateMutability":"view","type":"function"},
-  {"inputs":[],"name":"govMITOEmission","outputs":[{"internalType":"contract IGovMITOEmission","name":"","type":"address"}],"stateMutability":"view","type":"function"},
-  {"inputs":[],"name":"epochFeeder","outputs":[{"internalType":"contract IEpochFeeder","name":"","type":"address"}],"stateMutability":"view","type":"function"},
-  {"inputs":[{"internalType":"address","name":"valAddr","type":"address"}],"name":"lastClaimedOperatorRewardsEpoch","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"}
-];
-
-const managerAbi = [
-  {"inputs":[{"internalType":"uint256","name":"epoch","type":"uint256"},{"internalType":"address","name":"valAddr","type":"address"}],"name":"validatorInfoAt","outputs":[{"components":[{"internalType":"address","name":"rewardManager","type":"address"},{"internalType":"uint96","name":"commissionRate","type":"uint96"}],"internalType":"struct IValidatorManager.ValidatorInfoResponse","name":"","type":"tuple"}],"stateMutability":"view","type":"function"},
-  {"inputs":[],"name":"MAX_COMMISSION_RATE","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"}
-];
-
-const feedAbi = [
-  {"inputs":[{"internalType":"uint256","name":"epoch","type":"uint256"}],"name":"summary","outputs":[{"components":[{"internalType":"uint256","name":"totalWeight","type":"uint256"},{"internalType":"uint256","name":"totalCollateralRewardShare","type":"uint256"},{"internalType":"uint256","name":"totalDelegationRewardShare","type":"uint256"}],"internalType":"struct IValidatorContributionFeed.Summary","name":"","type":"tuple"}],"stateMutability":"view","type":"function"},
-  {"inputs":[{"internalType":"uint256","name":"epoch","type":"uint256"},{"internalType":"address","name":"valAddr","type":"address"}],"name":"weightOf","outputs":[{"components":[{"internalType":"uint256","name":"weight","type":"uint256"},{"internalType":"uint256","name":"collateralRewardShare","type":"uint256"},{"internalType":"uint256","name":"delegationRewardShare","type":"uint256"}],"internalType":"struct IValidatorContributionFeed.ValidatorWeight","name":"","type":"tuple"},{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"},
-  {"inputs":[{"internalType":"uint256","name":"epoch","type":"uint256"}],"name":"available","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"}
-];
-
-const emissionAbi = [
-  {"inputs":[{"internalType":"uint96","name":"epoch","type":"uint96"}],"name":"validatorReward","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"}
-];
-
-const epochFeederAbi = [
-  {"inputs":[],"name":"epoch","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"}
+  {
+    inputs: [{ internalType: "address", name: "valAddr", type: "address" }],
+    name: "claimableOperatorRewards",
+    outputs: [
+      { internalType: "uint256", name: "amount", type: "uint256" },
+      { internalType: "uint256", name: "epoch", type: "uint256" },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [{ internalType: "address", name: "valAddr", type: "address" }],
+    name: "lastClaimedOperatorRewardsEpoch",
+    outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
+    stateMutability: "view",
+    type: "function",
+  },
 ];
 
 export class RewardPoller {
   private timer: NodeJS.Timer | null = null;
   private provider = new JsonRpcProvider(env.RPC_URL);
   private running = false;
+  private distributor = new Contract(env.REWARD_CONTRACT_ADDRESS, distributorAbi, this.provider);
 
   constructor(private readonly logger: FastifyBaseLogger) {}
 
@@ -71,101 +65,70 @@ export class RewardPoller {
   }
 
   private async poll() {
-    const distributor = new Contract(env.REWARD_CONTRACT_ADDRESS, distributorAbi, this.provider);
+    this.logger.info("Polling for validator rewards...");
 
-    const validatorManagerAddr = await distributor.validatorManager();
-    const contributionFeedAddr = await distributor.validatorContributionFeed();
-    const govMITOEmissionAddr = await distributor.govMITOEmission();
-    const epochFeederAddr = await distributor.epochFeeder();
+    // 1. Update the claimed status of all rewards in the database first.
+    await this.updateClaimedStatus();
 
-    const manager = new Contract(validatorManagerAddr, managerAbi, this.provider);
-    const feed = new Contract(contributionFeedAddr, feedAbi, this.provider);
-    const emission = new Contract(govMITOEmissionAddr, emissionAbi, this.provider);
-    const epochFeeder = new Contract(epochFeederAddr, epochFeederAbi, this.provider);
+    // 2. Fetch the total claimable rewards from the contract.
+    const [totalClaimableRewards] = await this.distributor.claimableOperatorRewards(env.VALIDATOR_OPERATOR_ADDRESS);
 
-    const lastProcessedEpoch = await this.getLastProcessedEpoch();
-    const currentEpoch = await epochFeeder.epoch();
-
-    if (lastProcessedEpoch >= currentEpoch) {
-      this.logger.info({ lastProcessedEpoch, currentEpoch }, "No new epochs to process for rewards");
-      return;
-    }
-
-    this.logger.info({ from: lastProcessedEpoch + 1n, to: currentEpoch }, "Polling for rewards");
-
-    for (let epoch = lastProcessedEpoch + 1n; epoch < currentEpoch; epoch++) {
-      const available = await feed.available(epoch);
-      if (!available) {
-        this.logger.info({ epoch }, "Contribution feed not available for epoch, stopping for now.");
-        break;
-      }
-      const reward = await this.calculateRewardForEpoch(epoch, manager, feed, emission);
-      await this.persistReward(epoch, reward, distributor);
-    }
-  }
-
-  private async getLastProcessedEpoch(): Promise<bigint> {
-    const lastReward = await prisma.validatorReward.findFirst({
-      where: { operatorAddress: env.VALIDATOR_OPERATOR_ADDRESS },
-      orderBy: { epoch: 'desc' }
-    });
-    // Start from epoch 1 if no rewards are stored
-    return lastReward ? BigInt(lastReward.epoch) : 0n;
-  }
-
-  private async calculateRewardForEpoch(
-    epoch: bigint,
-    manager: Contract,
-    feed: Contract,
-    emission: Contract
-  ): Promise<bigint> {
-    const validatorInfo = await manager.validatorInfoAt(epoch, env.VALIDATOR_OPERATOR_ADDRESS);
-    const summary = await feed.summary(epoch);
-    const [weight, exists] = await feed.weightOf(epoch, env.VALIDATOR_OPERATOR_ADDRESS);
-
-    if (!exists || summary.totalWeight === 0n) {
-      return 0n;
-    }
-
-    const validatorReward = await emission.validatorReward(epoch);
-    const totalReward = (validatorReward * weight.weight) / summary.totalWeight;
-    const totalRewardShare = weight.collateralRewardShare + weight.delegationRewardShare;
-
-    if (totalRewardShare === 0n) {
-      return totalReward; // All rewards go to operator
-    }
-
-    const stakerReward = (totalReward * weight.delegationRewardShare) / totalRewardShare;
-    const maxCommissionRate = await manager.MAX_COMMISSION_RATE();
-    const commission = (stakerReward * validatorInfo.commissionRate) / maxCommissionRate;
-
-    const operatorReward = (totalReward - stakerReward) + commission;
-    return operatorReward;
-  }
-
-  private async persistReward(epoch: bigint, reward: bigint, distributor: Contract) {
-    const lastClaimedEpoch = await distributor.lastClaimedOperatorRewardsEpoch(env.VALIDATOR_OPERATOR_ADDRESS);
-    const claimed = epoch <= lastClaimedEpoch;
-
-    this.logger.info({ epoch, reward: reward.toString(), claimed }, "Persisting reward");
-
-    await prisma.validatorReward.upsert({
+    // 3. Get the sum of unclaimed rewards we have in our database.
+    const unclaimedRewardsInDb = await prisma.validatorReward.aggregate({
+      _sum: {
+        rewardAmount: true,
+      },
       where: {
-        operatorAddress_epoch: {
-          operatorAddress: env.VALIDATOR_OPERATOR_ADDRESS,
-          epoch: Number(epoch)
-        }
-      },
-      update: {
-        rewardAmount: reward,
-        claimed: claimed
-      },
-      create: {
         operatorAddress: env.VALIDATOR_OPERATOR_ADDRESS,
-        epoch: Number(epoch),
-        rewardAmount: reward,
-        claimed: claimed,
-      }
+        claimed: false,
+      },
     });
+    const sumOfUnclaimedRewardsInDb = unclaimedRewardsInDb._sum.rewardAmount ?? 0n;
+
+    // 4. The difference is the reward for the new epoch(s).
+    const newRewardAmount = BigInt(totalClaimableRewards) - sumOfUnclaimedRewardsInDb;
+
+    if (newRewardAmount > 0n) {
+      // 5. Find the latest epoch number from the database to determine the new epoch number.
+      const lastReward = await prisma.validatorReward.findFirst({
+        where: { operatorAddress: env.VALIDATOR_OPERATOR_ADDRESS },
+        orderBy: { epoch: 'desc' },
+      });
+      const newEpochNumber = lastReward ? lastReward.epoch + 1 : 1; // Start from epoch 1 if none exists
+
+      this.logger.info({ epoch: newEpochNumber, reward: newRewardAmount.toString() }, "Found new reward to persist.");
+
+      await prisma.validatorReward.create({
+        data: {
+          operatorAddress: env.VALIDATOR_OPERATOR_ADDRESS,
+          epoch: newEpochNumber,
+          rewardAmount: newRewardAmount,
+          claimed: false, // New rewards are by definition unclaimed.
+        },
+      });
+    } else {
+        this.logger.info("No new rewards detected.");
+    }
+  }
+
+  private async updateClaimedStatus() {
+    const lastClaimedEpochOnChain = await this.distributor.lastClaimedOperatorRewardsEpoch(env.VALIDATOR_OPERATOR_ADDRESS);
+
+    if (lastClaimedEpochOnChain > 0n) {
+      const result = await prisma.validatorReward.updateMany({
+        where: {
+          operatorAddress: env.VALIDATOR_OPERATOR_ADDRESS,
+          epoch: { lte: Number(lastClaimedEpochOnChain) },
+          claimed: false,
+        },
+        data: {
+          claimed: true,
+        },
+      });
+
+      if (result.count > 0) {
+        this.logger.info({ count: result.count, lastClaimedEpoch: lastClaimedEpochOnChain.toString() }, "Updated claimed status for rewards.");
+      }
+    }
   }
 }
