@@ -34,3 +34,15 @@ model PollingState {
   updatedAt   DateTime @updatedAt
   createdAt   DateTime @default(now())
 }
+
+model ValidatorReward {
+  id              String   @id @default(cuid())
+  operatorAddress String
+  epoch           Int
+  rewardAmount    BigInt
+  claimed         Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([operatorAddress, epoch])
+}
