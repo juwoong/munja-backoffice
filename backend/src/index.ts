@@ -6,7 +6,9 @@ import { env } from "@/env";
 import authenticationPlugin from "@/plugins/authentication";
 import authRoutes from "@/routes/auth";
 import eventsRoutes from "@/routes/events";
+import rewardsRoutes from "@/routes/rewards";
 import { EventPoller } from "@/services/event-poller";
+import { RewardPoller } from "@/services/reward-poller";
 import { disconnectPrisma } from "@/prisma";
 
 async function buildServer() {
@@ -27,23 +29,25 @@ async function buildServer() {
 
   await app.register(authRoutes);
   await app.register(eventsRoutes);
+  await app.register(rewardsRoutes);
 
   return app;
 }
 
 async function main() {
   const app = await buildServer();
-  const poller = new EventPoller(app.log);
+  const eventPoller = new EventPoller(app.log);
+  const rewardPoller = new RewardPoller(app.log);
 
   app.addHook("onClose", async () => {
-    await poller.stop();
+    await Promise.all([eventPoller.stop(), rewardPoller.stop()]);
     await disconnectPrisma();
   });
 
   try {
-    await poller.start();
+    await Promise.all([eventPoller.start(), rewardPoller.start()]);
   } catch (error) {
-    app.log.error({ err: error }, "Failed to start event poller");
+    app.log.error({ err: error }, "Failed to start pollers");
     process.exit(1);
   }
 
