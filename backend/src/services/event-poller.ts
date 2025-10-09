@@ -7,7 +7,7 @@ import { prisma } from "@/prisma";
 const POLLING_STATE_ID = 1;
 
 export class EventPoller {
-  private timer: NodeJS.Timer | null = null;
+  private timer: NodeJS.Timeout | null = null;
   private provider = new JsonRpcProvider(env.RPC_URL);
   private running = false;
 
@@ -118,7 +118,7 @@ export class EventPoller {
             transactionHash: log.transactionHash,
             logIndex: Number(log.index),
             data: log.data,
-            topics: log.topics
+            topics: [...log.topics]
           }
         })
       )

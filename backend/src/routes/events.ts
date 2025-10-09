@@ -2,6 +2,8 @@ import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import { prisma } from "@/prisma";
 
+type ContractEventRecord = Awaited<ReturnType<typeof prisma.contractEvent.findMany>>[number];
+
 const eventsQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
   pageSize: z.coerce.number().int().positive().max(100).default(20)
@@ -32,7 +34,7 @@ const eventsRoutes: FastifyPluginAsync = async (fastify) => {
       ]);
 
       return reply.send({
-        data: events.map((event) => ({
+        data: events.map((event: ContractEventRecord) => ({
           ...event,
           blockNumber: event.blockNumber.toString(),
           createdAt: event.createdAt.toISOString()

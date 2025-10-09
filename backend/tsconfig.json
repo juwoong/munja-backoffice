@@ -11,7 +11,7 @@
     "forceConsistentCasingInFileNames": true,
     "baseUrl": "./src",
     "paths": {
-      "@/*": ["./*"]
+      "@/*": ["./*.ts", "./*.d.ts"]
     },
     "types": ["node"],
     "noEmit": true

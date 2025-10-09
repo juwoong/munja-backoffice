@@ -25,7 +25,7 @@ const distributorAbi = [
 ];
 
 export class RewardPoller {
-  private timer: NodeJS.Timer | null = null;
+  private timer: NodeJS.Timeout | null = null;
   private provider = new JsonRpcProvider(env.RPC_URL);
   private running = false;
   private distributor = new Contract(env.REWARD_CONTRACT_ADDRESS, distributorAbi, this.provider);
