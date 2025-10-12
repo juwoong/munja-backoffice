@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { Navigate, useLocation, useNavigate, type Location } from "react-router-dom";
+import { Link, Navigate, useLocation, useNavigate, type Location } from "react-router-dom";
 import { z } from "zod";
 
 import { Button } from "@/components/ui/button";
@@ -118,6 +118,13 @@ export function LoginPage() {
             <Button type="submit" className="w-full" disabled={mutation.isPending}>
               {mutation.isPending ? "Signing in..." : "Sign in"}
             </Button>
+
+            <p className="text-center text-sm text-muted-foreground">
+              Don't have an account?{" "}
+              <Link to="/signup" className="font-medium text-primary underline-offset-4 hover:underline">
+                Sign up
+              </Link>
+            </p>
           </form>
         </CardContent>
       </Card>

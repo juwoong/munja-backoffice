@@ -4,6 +4,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider } from "@/context/auth-context";
 import { DashboardPage } from "@/pages/dashboard";
 import { LoginPage } from "@/pages/login";
+import { SignupPage } from "@/pages/signup";
 import { ProtectedRoute } from "@/routes/protected-route";
 
 const queryClient = new QueryClient();
@@ -15,6 +16,7 @@ function App() {
         <BrowserRouter>
           <Routes>
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/signup" element={<SignupPage />} />
             <Route
               path="/"
               element={

@@ -51,9 +51,18 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.status(401).send({ error: "Invalid credentials" });
     }
 
+    // Check user status
+    if (user.status === "PENDING") {
+      return reply.status(403).send({ error: "Your account is pending approval" });
+    }
+
+    if (user.status === "REJECTED") {
+      return reply.status(403).send({ error: "Your account has been rejected" });
+    }
+
     const token = fastify.jwt.sign({ userId: user.id });
 
-    return reply.send({ token, user: { id: user.id, email: user.email } });
+    return reply.send({ token, user: { id: user.id, email: user.email, status: user.status } });
   });
 };
 

@@ -5,7 +5,9 @@ import { env } from "@/env";
 import authenticationPlugin from "@/plugins/authentication";
 import authRoutes from "@/routes/auth";
 import rewardsRoutes from "@/routes/rewards";
+import priceRoutes from "@/routes/price";
 import { RewardPoller } from "@/services/reward-poller";
+import { PriceService } from "@/services/price-service";
 import { disconnectPrisma } from "@/prisma";
 
 async function buildServer() {
@@ -20,6 +22,7 @@ async function buildServer() {
   const allowedOrigins = ["*"];
 
   app.decorate("rewardPoller", new RewardPoller(app.log));
+  app.decorate("priceService", new PriceService(app.log));
 
   await app.register(cors, {
     origin: allowedOrigins,
@@ -33,6 +36,7 @@ async function buildServer() {
 
   await app.register(authRoutes);
   await app.register(rewardsRoutes);
+  await app.register(priceRoutes);
 
   return app;
 }

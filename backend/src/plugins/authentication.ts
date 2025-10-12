@@ -36,6 +36,24 @@ const authenticationPlugin: FastifyPluginAsync = fp(async (fastify) => {
 
     try {
       await request.jwtVerify();
+
+      // Check user status after JWT verification
+      const { prisma } = await import("@/prisma");
+      const user = await prisma.user.findUnique({
+        where: { id: request.user.userId }
+      });
+
+      if (!user) {
+        return reply.status(401).send({ error: "User not found" });
+      }
+
+      if (user.status !== "APPROVED") {
+        return reply.status(403).send({
+          error: user.status === "PENDING"
+            ? "Your account is pending approval"
+            : "Your account access has been revoked"
+        });
+      }
     } catch (err) {
       reply.send(err);
     }

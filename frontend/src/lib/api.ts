@@ -22,11 +22,22 @@ export interface LoginPayload {
   password: string;
 }
 
+export interface SignupPayload {
+  email: string;
+  password: string;
+}
+
+export interface SignupResponse {
+  id: string;
+  email: string;
+}
+
 export interface LoginResponse {
   token: string;
   user: {
     id: string;
     email: string;
+    status?: string;
   };
 }
 
@@ -38,6 +49,11 @@ export interface ValidatorReward {
   claimed: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+export async function signup(payload: SignupPayload) {
+  const response = await api.post<SignupResponse>("/auth/register", payload);
+  return response.data;
 }
 
 export async function login(payload: LoginPayload) {
@@ -85,4 +101,14 @@ export interface EventsResponse {
     total: number;
     totalPages: number;
   };
+}
+
+export interface MitosisPriceResponse {
+  price: number;
+  currency: string;
+}
+
+export async function fetchMitosisPrice() {
+  const response = await api.get<MitosisPriceResponse>("/price/mitosis");
+  return response.data;
 }

@@ -1,12 +1,12 @@
 import { useMemo, useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/hooks/use-auth";
 import { useRewards } from "@/hooks/use-rewards";
 import { MITO_DECIMALS, MITO_PRICE_USD } from "@/lib/constants";
-import { refreshRewards } from "@/lib/api";
+import { refreshRewards, fetchMitosisPrice } from "@/lib/api";
 import { cn, formatTokenAmount, formatUsd, parseTokenAmount } from "@/lib/utils";
 
 const formatEpochCreatedUtc = (isoString: string) => {
@@ -22,14 +22,22 @@ const formatEpochCreatedUtc = (isoString: string) => {
   return `${year}년 ${month}월 ${day}일 ${hour}:${minute} (UTC)`;
 };
 
-const toUsd = (tokenAmountBaseUnits: string) => {
-  const numeric = parseTokenAmount(tokenAmountBaseUnits, MITO_DECIMALS);
-  return Number.isFinite(numeric) ? numeric * MITO_PRICE_USD : 0;
-};
-
 export function DashboardPage() {
   const { user, logout } = useAuth();
   const { data: rewards = [], isLoading, isError, refetch } = useRewards();
+  const { data: priceData, isLoading: isPriceLoading } = useQuery({
+    queryKey: ["mitosis-price"],
+    queryFn: fetchMitosisPrice,
+    refetchInterval: 5 * 60 * 1000, // Refetch every 5 minutes
+    staleTime: 4 * 60 * 1000, // Consider stale after 4 minutes
+  });
+
+  const mitoPrice = priceData?.price ?? MITO_PRICE_USD;
+
+  const toUsd = (tokenAmountBaseUnits: string) => {
+    const numeric = parseTokenAmount(tokenAmountBaseUnits, MITO_DECIMALS);
+    return Number.isFinite(numeric) ? numeric * mitoPrice : 0;
+  };
   const [refreshFeedback, setRefreshFeedback] = useState<
     | { message: string; tone: "success" | "info" | "error" }
     | null
@@ -97,7 +105,7 @@ export function DashboardPage() {
       },
       { claimedUsd: 0, totalUsd: 0 }
     );
-  }, [rewards]);
+  }, [rewards, mitoPrice]);
 
   return (
     <div className="min-h-screen bg-muted/20">
@@ -123,10 +131,14 @@ export function DashboardPage() {
           <Card className="flex flex-col">
             <CardHeader>
               <CardTitle>Current MITO Price</CardTitle>
-              <CardDescription>Latest known price per MITO token.</CardDescription>
+              <CardDescription>Latest price per MITO token from Coingecko.</CardDescription>
             </CardHeader>
             <CardContent className="mt-auto">
-              <p className="text-3xl font-semibold">${MITO_PRICE_USD.toFixed(2)}</p>
+              {isPriceLoading ? (
+                <p className="text-lg text-muted-foreground">Loading...</p>
+              ) : (
+                <p className="text-3xl font-semibold">${mitoPrice.toFixed(4)}</p>
+              )}
             </CardContent>
           </Card>
 
