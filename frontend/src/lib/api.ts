@@ -2,7 +2,19 @@ import axios from "axios";
 
 type Nullable<T> = T | null;
 
-const API_BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:4000";
+// Runtime config support for Docker deployment
+declare global {
+  interface Window {
+    __RUNTIME_CONFIG__?: {
+      VITE_API_URL: string;
+    };
+  }
+}
+
+const API_BASE_URL =
+  window.__RUNTIME_CONFIG__?.VITE_API_URL ??
+  import.meta.env.VITE_API_URL ??
+  "http://localhost:4000";
 
 export const api = axios.create({
   baseURL: API_BASE_URL,

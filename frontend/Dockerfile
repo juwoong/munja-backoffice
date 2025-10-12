@@ -17,16 +17,20 @@ RUN pnpm install --filter frontend... --frozen-lockfile
 
 COPY frontend ./frontend
 
-ARG VITE_API_URL="http://localhost:4000"
-ENV VITE_API_URL=${VITE_API_URL}
-
 RUN pnpm --filter frontend... run build
 
 FROM nginx:1.27-alpine AS runner
 
+# Install bash for the entrypoint script
+RUN apk add --no-cache bash
+
 COPY frontend/nginx.conf /etc/nginx/conf.d/default.conf
+COPY frontend/docker-entrypoint.sh /docker-entrypoint.sh
 COPY --from=build /app/frontend/dist /usr/share/nginx/html
+
+RUN chmod +x /docker-entrypoint.sh
 
 EXPOSE 80
 
+ENTRYPOINT ["/docker-entrypoint.sh"]
 CMD ["nginx", "-g", "daemon off;"]

@@ -27,17 +27,12 @@
 4. Value: 위에서 생성한 토큰 붙여넣기
 5. "Add secret" 클릭
 
-### 3. Repository Variables 설정 (선택사항 - Frontend만)
+### 3. Frontend 런타임 환경변수 (선택사항)
 
-프론트엔드 API URL을 설정하려면:
+**중요**: Frontend 이미지는 빌드 시점이 아닌 **런타임에** 환경변수를 주입합니다.
+따라서 하나의 이미지를 여러 환경에서 재사용할 수 있습니다.
 
-1. Repository > Settings > Secrets and variables > Actions > Variables 탭
-2. "New repository variable" 클릭
-3. Name: `VITE_API_URL`
-4. Value: 예) `https://api.example.com`
-5. "Add variable" 클릭
-
-설정하지 않으면 기본값 `http://localhost:4000`이 사용됩니다.
+Repository Variables 설정은 **필요 없습니다**. 대신 Docker 실행 시 환경변수를 전달하세요.
 
 ## Backend Workflow (`backend.yml`)
 
@@ -132,11 +127,14 @@ docker run -d \
 # Pull
 docker pull ghcr.io/juwoong/munja-backoffice-frontend:latest
 
-# Run
+# Run with runtime environment variable
 docker run -d \
   -p 80:80 \
+  -e VITE_API_URL="https://api.your-domain.com" \
   --name frontend \
   ghcr.io/juwoong/munja-backoffice-frontend:latest
+
+# 환경변수를 지정하지 않으면 기본값 http://localhost:4000 사용
 ```
 
 ### Docker Compose
@@ -158,9 +156,34 @@ services:
     image: ghcr.io/juwoong/munja-backoffice-frontend:latest
     ports:
       - "80:80"
+    environment:
+      - VITE_API_URL=http://backend:4000  # Runtime 환경변수
     depends_on:
       - backend
 ```
+
+### 런타임 환경변수 재사용 (Frontend)
+
+Frontend 이미지는 빌드 타임이 아닌 **런타임에** 환경변수를 주입하므로, 하나의 이미지를 여러 환경에서 재사용할 수 있습니다:
+
+```bash
+# 개발 환경
+docker run -d -p 80:80 \
+  -e VITE_API_URL="http://localhost:4000" \
+  ghcr.io/juwoong/munja-backoffice-frontend:latest
+
+# 스테이징 환경
+docker run -d -p 80:80 \
+  -e VITE_API_URL="https://staging-api.example.com" \
+  ghcr.io/juwoong/munja-backoffice-frontend:latest
+
+# 프로덕션 환경
+docker run -d -p 80:80 \
+  -e VITE_API_URL="https://api.example.com" \
+  ghcr.io/juwoong/munja-backoffice-frontend:latest
+```
+
+동일한 이미지(`latest`)를 사용하면서 환경변수만 변경하여 다른 환경에 배포할 수 있습니다.
 
 ## 문제 해결
 
