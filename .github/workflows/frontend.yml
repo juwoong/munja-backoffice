@@ -72,4 +72,4 @@ jobs:
           cache-to: type=gha,mode=max,scope=frontend
           platforms: linux/amd64
           build-args: |
-            VITE_API_URL=${{ vars.VITE_API_URL || 'http://localhost:4000' }}
+            VITE_API_URL=${{ vars.VITE_API_URL || 'http://backend:4000' }}
