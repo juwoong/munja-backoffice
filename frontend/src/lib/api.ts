@@ -112,3 +112,47 @@ export async function fetchMitosisPrice() {
   const response = await api.get<MitosisPriceResponse>("/price/mitosis");
   return response.data;
 }
+
+// Reward Actions API
+export interface RewardAction {
+  id: string;
+  actionType: "RESTAKING" | "SELL";
+  amount: string;
+  averagePrice?: number;
+  note?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RewardActionSummary {
+  totalRestaking: string;
+  totalSellAmount: string;
+  totalSellRevenue: number;
+  availableBalance: string;
+}
+
+export interface CreateRewardActionPayload {
+  actionType: "RESTAKING" | "SELL";
+  amount: string;
+  averagePrice?: number;
+  note?: string;
+}
+
+export async function fetchRewardActions() {
+  const response = await api.get<RewardAction[]>("/reward-actions");
+  return response.data;
+}
+
+export async function fetchRewardActionsSummary() {
+  const response = await api.get<RewardActionSummary>("/reward-actions/summary");
+  return response.data;
+}
+
+export async function createRewardAction(payload: CreateRewardActionPayload) {
+  const response = await api.post<RewardAction>("/reward-actions", payload);
+  return response.data;
+}
+
+export async function deleteRewardAction(id: string) {
+  await api.delete(`/reward-actions/${id}`);
+}

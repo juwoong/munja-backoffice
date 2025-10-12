@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -116,6 +117,11 @@ export function DashboardPage() {
             <p className="text-sm text-muted-foreground">Track the latest MITO allocations at a glance.</p>
           </div>
           <div className="flex items-center gap-4">
+            <Link to="/reward-management">
+              <Button variant="ghost" size="sm">
+                Reward Management
+              </Button>
+            </Link>
             <div className="text-right">
               <p className="text-sm font-medium">{user?.email}</p>
             </div>

@@ -33,3 +33,18 @@ model ValidatorReward {
 
   @@unique([operatorAddress, epoch])
 }
+
+model RewardAction {
+  id           String           @id @default(uuid())
+  actionType   RewardActionType
+  amount       String // Amount in base units (for both RESTAKING and SELL)
+  averagePrice Float? // Average price per token for SELL actions (optional)
+  note         String? // Optional note
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+}
+
+enum RewardActionType {
+  RESTAKING
+  SELL
+}

@@ -5,6 +5,7 @@ import { env } from "@/env";
 import authenticationPlugin from "@/plugins/authentication";
 import authRoutes from "@/routes/auth";
 import rewardsRoutes from "@/routes/rewards";
+import rewardActionsRoutes from "@/routes/reward-actions";
 import priceRoutes from "@/routes/price";
 import { RewardPoller } from "@/services/reward-poller";
 import { PriceService } from "@/services/price-service";
@@ -36,6 +37,7 @@ async function buildServer() {
 
   await app.register(authRoutes);
   await app.register(rewardsRoutes);
+  await app.register(rewardActionsRoutes);
   await app.register(priceRoutes);
 
   return app;

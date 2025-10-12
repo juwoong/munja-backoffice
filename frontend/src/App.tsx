@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 
 import { AuthProvider } from "@/context/auth-context";
 import { DashboardPage } from "@/pages/dashboard";
+import { RewardManagementPage } from "@/pages/reward-management";
 import { LoginPage } from "@/pages/login";
 import { SignupPage } from "@/pages/signup";
 import { ProtectedRoute } from "@/routes/protected-route";
@@ -22,6 +23,14 @@ function App() {
               element={
                 <ProtectedRoute>
                   <DashboardPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/reward-management"
+              element={
+                <ProtectedRoute>
+                  <RewardManagementPage />
                 </ProtectedRoute>
               }
             />
