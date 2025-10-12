@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/use-auth";
-import { api, type LoginResponse } from "@/lib/api";
+import { login as loginRequest, type LoginResponse } from "@/lib/api";
 
 const loginSchema = z.object({
   email: z.string().email({ message: "Enter a valid email address" }),
@@ -17,13 +17,8 @@ const loginSchema = z.object({
 
 type LoginFormValues = z.infer<typeof loginSchema>;
 
-const DUMMY_CREDENTIALS = {
-  email: "test@test.com",
-  password: "1234" as const
-};
-
 export function LoginPage() {
-  const { token, login } = useAuth();
+  const { token, login: saveAuthState } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const redirectPath = useMemo(() => {
@@ -38,13 +33,10 @@ export function LoginPage() {
   });
   const [apiError, setApiError] = useState<string | null>(null);
 
-  const mutation = useMutation({
-    mutationFn: async (values: LoginFormValues) => {
-      const response = await api.post<LoginResponse>("/auth/login", values);
-      return response.data;
-    },
+  const mutation = useMutation<LoginResponse, unknown, LoginFormValues>({
+    mutationFn: loginRequest,
     onSuccess: (data) => {
-      login(data);
+      saveAuthState(data);
       navigate(redirectPath, { replace: true });
     },
     onError: (error: unknown) => {
@@ -69,24 +61,6 @@ export function LoginPage() {
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-
-    if (
-      formValues.email === DUMMY_CREDENTIALS.email &&
-      formValues.password === DUMMY_CREDENTIALS.password
-    ) {
-      // Short-circuit login for the shared dummy credentials used in local testing
-      setFormErrors({ email: "", password: "" });
-      setApiError(null);
-      login({
-        token: "dummy-token",
-        user: {
-          id: "dummy-user",
-          email: DUMMY_CREDENTIALS.email
-        }
-      });
-      navigate(redirectPath, { replace: true });
-      return;
-    }
 
     const result = loginSchema.safeParse(formValues);
 

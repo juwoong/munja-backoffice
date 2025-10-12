@@ -1,51 +1,13 @@
+import { useMemo, useState } from "react";
+import { useMutation } from "@tanstack/react-query";
+
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/hooks/use-auth";
-
-const mitoPriceUsd = 0.14;
-
-const distributionRows = [
-  {
-    epoch: "Epoch 1",
-    mitoAmount: 12500,
-    usdValue: 1750,
-    isClaimed: true,
-    createdAtUtc: "2024-05-30T09:00:00Z"
-  },
-  {
-    epoch: "Epoch 2",
-    mitoAmount: 8000,
-    usdValue: 1120,
-    isClaimed: false,
-    createdAtUtc: "2024-06-13T09:00:00Z"
-  },
-  {
-    epoch: "Epoch 3",
-    mitoAmount: 5250,
-    usdValue: 735,
-    isClaimed: false,
-    createdAtUtc: "2024-06-27T09:00:00Z"
-  }
-];
-
-const usdFormatter = new Intl.NumberFormat("en-US", {
-  style: "currency",
-  currency: "USD"
-});
-
-const getClaimTotals = () => {
-  return distributionRows.reduce(
-    (totals, row) => {
-      const usdValue = row.usdValue;
-      totals.totalUsd += usdValue;
-      if (row.isClaimed) {
-        totals.claimedUsd += usdValue;
-      }
-      return totals;
-    },
-    { claimedUsd: 0, totalUsd: 0 }
-  );
-};
+import { useRewards } from "@/hooks/use-rewards";
+import { MITO_DECIMALS, MITO_PRICE_USD } from "@/lib/constants";
+import { refreshRewards } from "@/lib/api";
+import { cn, formatTokenAmount, formatUsd, parseTokenAmount } from "@/lib/utils";
 
 const formatEpochCreatedUtc = (isoString: string) => {
   const date = new Date(isoString);
@@ -60,9 +22,82 @@ const formatEpochCreatedUtc = (isoString: string) => {
   return `${year}년 ${month}월 ${day}일 ${hour}:${minute} (UTC)`;
 };
 
+const toUsd = (tokenAmountBaseUnits: string) => {
+  const numeric = parseTokenAmount(tokenAmountBaseUnits, MITO_DECIMALS);
+  return Number.isFinite(numeric) ? numeric * MITO_PRICE_USD : 0;
+};
+
 export function DashboardPage() {
   const { user, logout } = useAuth();
-  const { claimedUsd, totalUsd } = getClaimTotals();
+  const { data: rewards = [], isLoading, isError, refetch } = useRewards();
+  const [refreshFeedback, setRefreshFeedback] = useState<
+    | { message: string; tone: "success" | "info" | "error" }
+    | null
+  >(null);
+
+  const refreshMutation = useMutation({
+    mutationFn: refreshRewards,
+    onSuccess: (data) => {
+      refetch();
+
+      if ((data.status === "new-reward" || data.status === "initialized") && data.newReward) {
+        setRefreshFeedback({
+          message: `${
+            data.status === "initialized" ? "Initialized" : "Epoch"
+          } ${data.newReward.epoch} recorded (${formatTokenAmount(
+            data.newReward.amount,
+            MITO_DECIMALS,
+            4
+          )} $MITO).`,
+          tone: "success"
+        });
+        return;
+      }
+
+      if (data.status === "skipped") {
+        setRefreshFeedback({
+          message: "Refresh already in progress. Please try again shortly.",
+          tone: "info"
+        });
+        return;
+      }
+
+      setRefreshFeedback({
+        message:
+          data.message ??
+          (data.updatedClaimedCount > 0
+            ? `Updated ${data.updatedClaimedCount} claimed reward${
+                data.updatedClaimedCount > 1 ? "s" : ""
+              }.`
+            : "No new rewards detected."),
+        tone: "info"
+      });
+    },
+    onError: () => {
+      setRefreshFeedback({
+        message: "Manual refresh failed. Please retry in a moment.",
+        tone: "error"
+      });
+    }
+  });
+
+  const totals = useMemo(() => {
+    return rewards.reduce(
+      (acc, reward) => {
+        const baseAmount = reward.rewardAmount;
+        const usdValue = toUsd(baseAmount);
+
+        acc.totalUsd += usdValue;
+
+        if (reward.claimed) {
+          acc.claimedUsd += usdValue;
+        }
+
+        return acc;
+      },
+      { claimedUsd: 0, totalUsd: 0 }
+    );
+  }, [rewards]);
 
   return (
     <div className="min-h-screen bg-muted/20">
@@ -91,7 +126,7 @@ export function DashboardPage() {
               <CardDescription>Latest known price per MITO token.</CardDescription>
             </CardHeader>
             <CardContent className="mt-auto">
-              <p className="text-3xl font-semibold">${mitoPriceUsd.toFixed(2)}</p>
+              <p className="text-3xl font-semibold">${MITO_PRICE_USD.toFixed(2)}</p>
             </CardContent>
           </Card>
 
@@ -101,7 +136,7 @@ export function DashboardPage() {
               <CardDescription>Total USD claimed across epochs.</CardDescription>
             </CardHeader>
             <CardContent className="mt-auto">
-              <p className="text-3xl font-semibold">{usdFormatter.format(claimedUsd)}</p>
+              <p className="text-3xl font-semibold">{formatUsd(totals.claimedUsd)}</p>
             </CardContent>
           </Card>
 
@@ -111,16 +146,44 @@ export function DashboardPage() {
               <CardDescription>Aggregate USD value across all epochs.</CardDescription>
             </CardHeader>
             <CardContent className="mt-auto">
-              <p className="text-3xl font-semibold">{usdFormatter.format(totalUsd)}</p>
+              <p className="text-3xl font-semibold">{formatUsd(totals.totalUsd)}</p>
             </CardContent>
           </Card>
         </section>
 
         <section className="space-y-4">
-          <div>
-            <h2 className="text-xl font-semibold">MITO Distribution</h2>
-            <p className="text-sm text-muted-foreground">Example allocation data for each epoch.</p>
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h2 className="text-xl font-semibold">MITO Distribution</h2>
+              <p className="text-sm text-muted-foreground">Validator rewards loaded directly from the API.</p>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              className="md:w-auto"
+              onClick={() => {
+                setRefreshFeedback(null);
+                refreshMutation.mutate();
+              }}
+              disabled={refreshMutation.isPending}
+            >
+              {refreshMutation.isPending ? "Refreshing..." : "Refresh now"}
+            </Button>
           </div>
+          {refreshFeedback && (
+            <p
+              className={cn(
+                "text-sm",
+                refreshFeedback.tone === "error"
+                  ? "text-destructive"
+                  : refreshFeedback.tone === "success"
+                    ? "text-emerald-600"
+                    : "text-muted-foreground"
+              )}
+            >
+              {refreshFeedback.message}
+            </p>
+          )}
           <div className="overflow-hidden rounded-lg border bg-background shadow-sm">
             <div className="overflow-x-auto">
               <table className="min-w-full text-left text-sm">
@@ -129,30 +192,64 @@ export function DashboardPage() {
                     <th className="px-3 py-2">Epoch</th>
                     <th className="px-3 py-2">$MITO Amount</th>
                     <th className="px-3 py-2">$USD Value</th>
-                    <th className="px-3 py-2">Is Claimed</th>
-                    <th className="px-3 py-2">Epoch Created (UTC)</th>
+                    <th className="px-3 py-2">Status</th>
+                    <th className="px-3 py-2">Created (UTC)</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {distributionRows.map((row) => (
-                    <tr key={row.epoch} className="border-b last:border-0">
-                      <td className="px-3 py-2">{row.epoch}</td>
-                      <td className="px-3 py-2 font-mono">{row.mitoAmount.toLocaleString()}</td>
-                      <td className="px-3 py-2 font-mono">{usdFormatter.format(row.usdValue)}</td>
-                      <td className="px-3 py-2">
-                        <span
-                          className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium ${
-                            row.isClaimed ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
-                          }`}
-                        >
-                          {row.isClaimed ? "Claimed" : "Pending"}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2 font-mono text-xs text-muted-foreground">
-                        {formatEpochCreatedUtc(row.createdAtUtc)}
+                  {isLoading && (
+                    <tr>
+                      <td colSpan={5} className="px-3 py-6 text-center text-sm text-muted-foreground">
+                        Loading rewards...
                       </td>
                     </tr>
-                  ))}
+                  )}
+
+                  {isError && !isLoading && (
+                    <tr>
+                      <td colSpan={5} className="px-3 py-6 text-center text-sm text-destructive">
+                        Failed to load rewards.{' '}
+                        <button className="underline" type="button" onClick={() => refetch()}>
+                          Retry
+                        </button>
+                      </td>
+                    </tr>
+                  )}
+
+                  {!isLoading && !isError && rewards.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="px-3 py-6 text-center text-sm text-muted-foreground">
+                        No rewards have been recorded yet.
+                      </td>
+                    </tr>
+                  )}
+
+                  {!isLoading && !isError &&
+                    rewards.map((reward) => {
+                      const mitoDisplay = formatTokenAmount(reward.rewardAmount, MITO_DECIMALS, 6);
+                      const usdValue = toUsd(reward.rewardAmount);
+
+                      return (
+                        <tr key={reward.id} className="border-b last:border-0">
+                          <td className="px-3 py-2">Epoch {reward.epoch}</td>
+                          <td className="px-3 py-2 font-mono">{mitoDisplay}</td>
+                          <td className="px-3 py-2 font-mono">{formatUsd(usdValue)}</td>
+                          <td className="px-3 py-2">
+                            <span
+                              className={cn(
+                                "inline-flex items-center rounded-full px-3 py-1 text-xs font-medium",
+                                reward.claimed ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
+                              )}
+                            >
+                              {reward.claimed ? "Claimed" : "Pending"}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2 font-mono text-xs text-muted-foreground">
+                            {formatEpochCreatedUtc(reward.createdAt)}
+                          </td>
+                        </tr>
+                      );
+                    })}
                 </tbody>
               </table>
             </div>

@@ -1,13 +1,10 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
-import sensible from "@fastify/sensible";
 
 import { env } from "@/env";
 import authenticationPlugin from "@/plugins/authentication";
 import authRoutes from "@/routes/auth";
-import eventsRoutes from "@/routes/events";
 import rewardsRoutes from "@/routes/rewards";
-import { EventPoller } from "@/services/event-poller";
 import { RewardPoller } from "@/services/reward-poller";
 import { disconnectPrisma } from "@/prisma";
 
@@ -15,20 +12,26 @@ async function buildServer() {
   const app = Fastify({
     logger: {
       transport: {
-        target: "pino-pretty"
-      }
-    }
+        target: "pino-pretty",
+      },
+    },
   });
 
-  await app.register(sensible);
+  const allowedOrigins = ["*"];
+
+  app.decorate("rewardPoller", new RewardPoller(app.log));
+
   await app.register(cors, {
-    origin: env.APP_ORIGIN,
-    credentials: true
+    origin: allowedOrigins,
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: "*",
+    exposedHeaders: "*",
+    maxAge: 86400,
   });
   await app.register(authenticationPlugin);
 
   await app.register(authRoutes);
-  await app.register(eventsRoutes);
   await app.register(rewardsRoutes);
 
   return app;
@@ -36,18 +39,16 @@ async function buildServer() {
 
 async function main() {
   const app = await buildServer();
-  const eventPoller = new EventPoller(app.log);
-  const rewardPoller = new RewardPoller(app.log);
 
   app.addHook("onClose", async () => {
-    await Promise.all([eventPoller.stop(), rewardPoller.stop()]);
+    await app.rewardPoller.stop();
     await disconnectPrisma();
   });
 
   try {
-    await Promise.all([eventPoller.start(), rewardPoller.start()]);
+    await app.rewardPoller.start();
   } catch (error) {
-    app.log.error({ err: error }, "Failed to start pollers");
+    app.log.error({ err: error }, "Failed to start reward poller");
     process.exit(1);
   }
 

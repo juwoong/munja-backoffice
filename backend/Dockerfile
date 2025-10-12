@@ -9,6 +9,10 @@ ENV PATH="$PNPM_HOME:$PATH"
 
 RUN corepack enable
 
+RUN apt-get update -y \
+  && apt-get install -y --no-install-recommends openssl \
+  && rm -rf /var/lib/apt/lists/*
+
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 COPY backend/package.json backend/package.json
 COPY frontend/package.json frontend/package.json
