@@ -181,50 +181,54 @@ export function RewardManagementPage() {
 
       <main className="mx-auto flex max-w-4xl flex-col gap-6 px-6 py-6">
         {/* Summary Cards */}
-        <section className="grid gap-4 md:grid-cols-4">
-          <Card className="flex flex-col">
+        <section className="space-y-4">
+          {/* Available Balance - 강조 */}
+          <Card className="flex flex-col border-2 border-green-200 bg-green-50/50">
             <CardHeader>
-              <CardTitle>Available Balance</CardTitle>
-              <CardDescription>Current available MITO</CardDescription>
+              <CardTitle className="text-xl">Available Balance</CardTitle>
+              <CardDescription>Current available MITO for actions</CardDescription>
             </CardHeader>
             <CardContent className="mt-auto">
-              <p className="text-2xl font-semibold font-mono text-green-600">
+              <p className="text-4xl font-bold font-mono text-green-600">
                 {availableBalanceDisplay} MITO
               </p>
             </CardContent>
           </Card>
 
-          <Card className="flex flex-col">
-            <CardHeader>
-              <CardTitle>Total Claimed</CardTitle>
-              <CardDescription>Total MITO claimed</CardDescription>
-            </CardHeader>
-            <CardContent className="mt-auto">
-              <p className="text-2xl font-semibold font-mono">
-                {formatTokenAmount(totalClaimedMito.toString(), MITO_DECIMALS, 6)} MITO
-              </p>
-            </CardContent>
-          </Card>
+          {/* 나머지 통계 3개 */}
+          <div className="grid gap-4 md:grid-cols-3">
+            <Card className="flex flex-col">
+              <CardHeader>
+                <CardTitle>Total Claimed</CardTitle>
+                <CardDescription>Total MITO claimed</CardDescription>
+              </CardHeader>
+              <CardContent className="mt-auto">
+                <p className="text-2xl font-semibold font-mono">
+                  {formatTokenAmount(totalClaimedMito.toString(), MITO_DECIMALS, 6)} MITO
+                </p>
+              </CardContent>
+            </Card>
 
-          <Card className="flex flex-col">
-            <CardHeader>
-              <CardTitle>Total Restaked</CardTitle>
-              <CardDescription>MITO restaked</CardDescription>
-            </CardHeader>
-            <CardContent className="mt-auto">
-              <p className="text-2xl font-semibold font-mono">{totalRestakingDisplay} MITO</p>
-            </CardContent>
-          </Card>
+            <Card className="flex flex-col">
+              <CardHeader>
+                <CardTitle>Total Restaked</CardTitle>
+                <CardDescription>MITO restaked</CardDescription>
+              </CardHeader>
+              <CardContent className="mt-auto">
+                <p className="text-2xl font-semibold font-mono">{totalRestakingDisplay} MITO</p>
+              </CardContent>
+            </Card>
 
-          <Card className="flex flex-col">
-            <CardHeader>
-              <CardTitle>Sell Revenue</CardTitle>
-              <CardDescription>USD from sales</CardDescription>
-            </CardHeader>
-            <CardContent className="mt-auto">
-              <p className="text-2xl font-semibold">{totalSellRevenueDisplay}</p>
-            </CardContent>
-          </Card>
+            <Card className="flex flex-col">
+              <CardHeader>
+                <CardTitle>Sell Revenue</CardTitle>
+                <CardDescription>USD from sales</CardDescription>
+              </CardHeader>
+              <CardContent className="mt-auto">
+                <p className="text-2xl font-semibold">{totalSellRevenueDisplay}</p>
+              </CardContent>
+            </Card>
+          </div>
         </section>
 
         {/* Action Form */}
